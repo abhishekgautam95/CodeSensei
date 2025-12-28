@@ -1,0 +1,5 @@
+{
+  "name": "CodeSensei: AI Judge & Mentor",
+  "description": "A real-time competitive coding platform where an AI judge generates tricky challenges and provides Hinglish mentorship and feedback.",
+  "requestFramePermissions": []
+}
