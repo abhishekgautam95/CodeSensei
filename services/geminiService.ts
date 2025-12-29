@@ -104,7 +104,7 @@ export const generateSenseiVoice = async (text: string): Promise<string> => {
     },
   });
   
-  // Optimized: Use optional chaining once and provide default early
+  // Extract audio data for better readability and null-safety
   const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   return audioData ?? '';
 };

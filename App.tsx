@@ -16,9 +16,13 @@ import { generateProblem, evaluateSolution, generateSenseiVoice, askSenseiHint }
  * 1. useCallback hooks for all event handlers to prevent unnecessary re-renders
  * 2. useMemo for expensive computations (line numbers generation)
  * 3. Optimized base64 to binary conversion using Uint8Array.from
- * 4. Optimized audio buffer creation using channelData.set()
+ * 4. Optimized audio buffer creation using Float32Array.from
  * 5. Memoized all callback functions that are passed as props
  */
+
+// Constants
+const LINE_COUNT = 40; // Number of line numbers to display in the editor
+
 const App: React.FC = () => {
   // State
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
@@ -63,7 +67,8 @@ const App: React.FC = () => {
     const channelData = buffer.getChannelData(0);
     
     // Optimized: Use Float32Array.from() to normalize in a single operation
-    // This eliminates the manual loop and batches the conversion
+    // Note: Float32Array.from + channelData.set is faster than individual assignments
+    // because set() is optimized for bulk array operations in the Web Audio API
     const normalizedData = Float32Array.from(dataInt16, val => val / 32768.0);
     channelData.set(normalizedData);
     
@@ -135,7 +140,7 @@ const App: React.FC = () => {
 
   // Memoize line numbers to avoid recreating on every render
   const lineNumbers = useMemo(() => 
-    Array.from({length: 40}, (_, i) => <div key={i} className="h-[1.4rem]">{i+1}</div>),
+    Array.from({length: LINE_COUNT}, (_, i) => <div key={i} className="h-[1.4rem]">{i+1}</div>),
     []
   );
 
@@ -153,10 +158,10 @@ const App: React.FC = () => {
   }, []);
 
   const handleChatKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && chatMessage.trim() && problem) {
       handleAssistantAsk();
     }
-  }, [handleAssistantAsk]);
+  }, [chatMessage, problem, handleAssistantAsk]);
 
   const toggleVoice = useCallback(() => {
     setIsVoiceEnabled(prev => !prev);
