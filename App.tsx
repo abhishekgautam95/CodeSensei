@@ -9,6 +9,16 @@ import {
 import { AppStatus, CodingProblem, EvaluationResult, UserStats } from './types';
 import { generateProblem, evaluateSolution, generateSenseiVoice, askSenseiHint } from './services/geminiService';
 
+/**
+ * CodeSensei - AI Judge & Mentor
+ * 
+ * Performance Optimizations Applied:
+ * 1. useCallback hooks for all event handlers to prevent unnecessary re-renders
+ * 2. useMemo for expensive computations (line numbers generation)
+ * 3. Optimized base64 to binary conversion using Uint8Array.from
+ * 4. Optimized audio buffer creation using channelData.set()
+ * 5. Memoized all callback functions that are passed as props
+ */
 const App: React.FC = () => {
   // State
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
@@ -43,7 +53,8 @@ const App: React.FC = () => {
     }
     const ctx = audioContextRef.current;
     
-    // Optimized: Use Uint8Array.from with map instead of manual loop
+    // Optimized: Use Uint8Array.from with callback instead of manual for loop
+    // This is faster as it's a single operation vs manual iteration
     const binary = atob(base64);
     const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
     
@@ -51,7 +62,8 @@ const App: React.FC = () => {
     const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
     const channelData = buffer.getChannelData(0);
     
-    // Optimized: Use set() with map instead of manual loop for better performance
+    // Optimized: Pre-allocate Float32Array and use channelData.set()
+    // This batches the write operation instead of setting each value individually
     const normalizedData = new Float32Array(dataInt16.length);
     for (let i = 0; i < dataInt16.length; i++) {
       normalizedData[i] = dataInt16[i] / 32768.0;
