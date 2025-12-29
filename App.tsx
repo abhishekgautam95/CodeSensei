@@ -62,12 +62,9 @@ const App: React.FC = () => {
     const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
     const channelData = buffer.getChannelData(0);
     
-    // Optimized: Pre-allocate Float32Array and use channelData.set()
-    // This batches the write operation instead of setting each value individually
-    const normalizedData = new Float32Array(dataInt16.length);
-    for (let i = 0; i < dataInt16.length; i++) {
-      normalizedData[i] = dataInt16[i] / 32768.0;
-    }
+    // Optimized: Use Float32Array.from() to normalize in a single operation
+    // This eliminates the manual loop and batches the conversion
+    const normalizedData = Float32Array.from(dataInt16, val => val / 32768.0);
     channelData.set(normalizedData);
     
     const source = ctx.createBufferSource();
