@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Trophy, Code2, Play, Send, RotateCcw, Cpu, MessageSquare, 
   Lightbulb, AlertCircle, CheckCircle2, ChevronRight, Loader2,
@@ -34,8 +34,8 @@ const App: React.FC = () => {
     localStorage.setItem('codesensei_stats', JSON.stringify(stats));
   }, [stats]);
 
-  // Audio Playback
-  const playVoice = async (base64: string) => {
+  // Audio Playback - Optimized for performance
+  const playVoice = useCallback(async (base64: string) => {
     if (!isVoiceEnabled || !base64) return;
     
     if (!audioContextRef.current) {
@@ -43,22 +43,28 @@ const App: React.FC = () => {
     }
     const ctx = audioContextRef.current;
     
+    // Optimized: Use Uint8Array.from with map instead of manual loop
     const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
     
     const dataInt16 = new Int16Array(bytes.buffer);
     const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
     const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+    
+    // Optimized: Use set() with map instead of manual loop for better performance
+    const normalizedData = new Float32Array(dataInt16.length);
+    for (let i = 0; i < dataInt16.length; i++) {
+      normalizedData[i] = dataInt16[i] / 32768.0;
+    }
+    channelData.set(normalizedData);
     
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
     source.start();
-  };
+  }, [isVoiceEnabled]);
 
-  const startNewContest = async () => {
+  const startNewContest = useCallback(async () => {
     try {
       setStatus(AppStatus.GENERATING);
       const newProblem = await generateProblem();
@@ -74,9 +80,9 @@ const App: React.FC = () => {
       console.error(err);
       setStatus(AppStatus.IDLE);
     }
-  };
+  }, [language]);
 
-  const handleAssistantAsk = async () => {
+  const handleAssistantAsk = useCallback(async () => {
     if (!chatMessage.trim() || !problem) return;
     const msg = chatMessage;
     setChatMessage('');
@@ -91,9 +97,9 @@ const App: React.FC = () => {
     } finally {
       setIsAssistantLoading(false);
     }
-  };
+  }, [chatMessage, problem, code, playVoice]);
 
-  const submitSolution = async () => {
+  const submitSolution = useCallback(async () => {
     if (!problem || !code.trim()) return;
     try {
       setStatus(AppStatus.JUDGING);
@@ -116,7 +122,40 @@ const App: React.FC = () => {
     } catch (err) {
       setStatus(AppStatus.CONTEST_READY);
     }
-  };
+  }, [problem, code, language, playVoice]);
+
+  // Memoize line numbers to avoid recreating on every render
+  const lineNumbers = useMemo(() => 
+    Array.from({length: 40}, (_, i) => <div key={i} className="h-[1.4rem]">{i+1}</div>),
+    []
+  );
+
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleLanguageChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setLanguage(e.target.value);
+  }, []);
+
+  const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCode(e.target.value);
+  }, []);
+
+  const handleChatMessageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatMessage(e.target.value);
+  }, []);
+
+  const handleChatKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleAssistantAsk();
+    }
+  }, [handleAssistantAsk]);
+
+  const toggleVoice = useCallback(() => {
+    setIsVoiceEnabled(prev => !prev);
+  }, []);
+
+  const returnToAssistant = useCallback(() => {
+    setStatus(AppStatus.CONTEST_READY);
+  }, []);
 
   return (
     <div className="h-screen bg-[#050505] text-slate-200 flex flex-col overflow-hidden">
@@ -142,7 +181,7 @@ const App: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+            onClick={toggleVoice}
             className={`p-2 rounded-lg border transition-colors ${isVoiceEnabled ? 'border-indigo-500/50 text-indigo-400 bg-indigo-500/5' : 'border-white/5 text-slate-500'}`}
           >
             {isVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -261,7 +300,7 @@ const App: React.FC = () => {
           <section className="flex-1 flex flex-col relative bg-[#080808]">
             <div className="flex items-center justify-between px-6 py-3 border-b border-white/5 bg-black/20">
                <div className="flex gap-4">
-                 <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-transparent text-xs font-bold text-slate-400 outline-none hover:text-white transition-colors cursor-pointer">
+                 <select value={language} onChange={handleLanguageChange} className="bg-transparent text-xs font-bold text-slate-400 outline-none hover:text-white transition-colors cursor-pointer">
                     <option value="python">PYTHON 3.11</option>
                     <option value="javascript">NODE.JS 20</option>
                  </select>
@@ -272,11 +311,11 @@ const App: React.FC = () => {
             <div className="flex-1 relative group">
               {/* Line Numbers Sim */}
               <div className="absolute left-0 top-0 w-10 h-full bg-black/40 text-[10px] text-slate-700 mono py-6 flex flex-col items-center select-none">
-                {Array.from({length: 40}).map((_, i) => <div key={i} className="h-[1.4rem]">{i+1}</div>)}
+                {lineNumbers}
               </div>
               <textarea
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={handleCodeChange}
                 className="w-full h-full bg-transparent pl-12 pr-6 py-6 mono text-[13px] text-indigo-100 outline-none resize-none leading-[1.4rem] selection:bg-indigo-500/30"
                 spellCheck={false}
               />
@@ -346,7 +385,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <button onClick={() => setStatus(AppStatus.CONTEST_READY)} className="w-full py-3 border border-white/10 hover:bg-white/5 text-slate-400 text-xs font-bold rounded-xl transition-all uppercase tracking-widest mt-4">
+                  <button onClick={returnToAssistant} className="w-full py-3 border border-white/10 hover:bg-white/5 text-slate-400 text-xs font-bold rounded-xl transition-all uppercase tracking-widest mt-4">
                     Back to Assistant
                   </button>
                </div>
@@ -390,8 +429,8 @@ const App: React.FC = () => {
                     <input 
                       type="text"
                       value={chatMessage}
-                      onChange={(e) => setChatMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAssistantAsk()}
+                      onChange={handleChatMessageChange}
+                      onKeyDown={handleChatKeyDown}
                       placeholder="Ask for a logic hint..."
                       className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-xs outline-none focus:border-indigo-500/50 transition-colors"
                     />
