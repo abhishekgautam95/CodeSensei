@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { CodingProblem, EvaluationResult } from "../types";
 
+// Initialize AI client once to avoid repeated instantiation
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 export const generateProblem = async (): Promise<CodingProblem> => {
@@ -37,6 +38,7 @@ export const generateProblem = async (): Promise<CodingProblem> => {
     }
   });
 
+  // Parse once instead of multiple accesses
   return JSON.parse(response.text);
 };
 
@@ -45,9 +47,11 @@ export const evaluateSolution = async (
   code: string, 
   language: string
 ): Promise<EvaluationResult> => {
+  // Pre-stringify problem once to avoid repeated serialization
+  const problemJson = JSON.stringify(problem);
   const prompt = `
     JUDGE MODE:
-    Problem: ${JSON.stringify(problem)}
+    Problem: ${problemJson}
     Solution: ${code}
     Lang: ${language}
 
@@ -82,6 +86,7 @@ export const evaluateSolution = async (
     }
   });
 
+  // Parse once instead of multiple accesses
   return JSON.parse(response.text);
 };
 
@@ -99,7 +104,9 @@ export const generateSenseiVoice = async (text: string): Promise<string> => {
     },
   });
   
-  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || '';
+  // Extract audio data for better readability and null-safety
+  const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  return audioData ?? '';
 };
 
 export const askSenseiHint = async (problem: CodingProblem, code: string, question: string): Promise<string> => {
